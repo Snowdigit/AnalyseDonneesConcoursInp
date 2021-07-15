@@ -1,0 +1,2907 @@
+---
+title: "SOUMAKANZA"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::readthedown:
+    highlight: kate
+---
+
+
+```{r setup, include=FALSE}
+library(knitr)
+library(rmdformats)
+
+## Global options
+options(max.print="75")
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE,
+	cache = TRUE,
+	comment = NA,
+	prompt = TRUE,
+	tidy = TRUE
+)
+opts_knit$set(width=75)
+```
+
+
+
+
+
+
+
+
+
+
+# **Librairies et importations**
+
+
+
+<p>Le package tidyverse va charger plusieurs extensions qui constituent le “coeur” du tidyverse, a savoir :
+
+ggplot2 (visualisation) <br>
+dplyr (manipulation des données)<br>
+tidyr (remise en forme des données)<br>
+purrr (programmation)<br>
+readr (importation de données)<br>
+tibble (tableaux de données)<br>
+forcats (variables qualitatives)<br>
+stringr (chaînes de caractères)<br>
+</p>
+
+<p>
+Le package readxl permet d'importer les fichiers avec extension xlsx 
+</p>
+
+<p>
+Le package questionr permet d'utiliser la fonction freq afin d'afficher les pourcentages de nos modalités
+</p>
+
+<p>Le package lubridate est spécialement développé pour faciliter la manipulation et le calcul autour des dates.</p>
+
+<p> Le package doParallel permet de paralléliser un code sur les différents coeurs d’une machine et ainsi de diviser le temps d’exécution de celui-ci. </p>
+
+<p>highcharter permet de faire des graphiques</p>
+<p>fastDummies permet de créer des variables dummies</p>
+<p>reshape2 permet d'utiliser la fonction dcast pour la transposition de dataframe</p>
+```{r}
+library(tidyverse)
+library(readxl) 
+library(questionr)
+library(lubridate)
+library(highcharter)
+library(reshape2)
+library(viridisLite)
+library(fastDummies)
+library(factoextra)
+library(FactoMineR)
+library(caret)
+
+```
+
+### **1-Importation de la feuille "tous les candidats" qui représente les candidats ayant manifesté l'interêt de passer le concours en s'inscrivant en ligne**
+
+```{r}
+lien="E:/cours idsi/semestre2/projet tutore/Sources/BASE-CONCOURS-BACHELIER-2018.xlsx"
+allcand= read_excel(path=lien, sheet= 1) 
+
+head(allcand,10)
+```
+
+
+### **2-Importation de la feuille "toutes les notes" contenant les notes au bac et les moyennes obtenues de la seconde à la terminale par tous ceux qui se sont inscrits en ligne**
+
+```{r}
+allcandnotes= read_excel(path=lien, sheet= 3)
+head(allcandnotes)
+
+```
+
+
+
+### **3-Importation de la feuille "candidats valides" qui représente les candidats ayant correctement effectué leur inscription en ligne **
+
+```{r}
+candval= read_excel(path=lien, sheet= 5)
+head(candval)
+
+```
+
+
+### **4-Importation de la feuille "notes candidats valides" contenant les notes au bac et les moyennes obtenues de la seconde à la terminale par tous les candidats valides**
+
+```{r}
+candvalnotes= read_excel(path=lien, sheet= 4)
+head(candvalnotes)
+
+```
+
+
+
+### **5-Importation de la feuille "liste candidats admissibles" qui contient les informations des candidats qui ont été sélectionnés après étude de dossiers et qui sont autorisés à composer**
+
+```{r}
+candadmissib= read_excel(path=lien, sheet= 7)
+head(candadmissib)
+
+```
+
+
+### **6-Importation de la feuille "notes test candidats" qui contient les notes au concours des candidats **
+
+```{r}
+notetest= read_excel(path=lien, sheet= 8)
+head(notetest)
+
+```
+
+
+
+### **7-Importation de la feuille "tous les choix" qui représente les moyennes par choix de tous les étudiants**
+
+```{r}
+moyparchoix= read_excel(path=lien, sheet= 2)
+
+
+#Conversion des variables moyenne en numeric (elles sont de type chaîne)
+moyparchoix$moyenneDossier = as.numeric(moyparchoix$moyenneDossier)
+moyparchoix$moyenneTest = as.numeric(moyparchoix$moyenneTest)
+moyparchoix$moyenneDefinitive = as.numeric(moyparchoix$moyenneDefinitive)
+
+#Calcul de la moyenne definitive des candidats, y compris ceux qui n'ont pas composés
+
+moyparchoix$moyenneDefinitive = (moyparchoix$moyenneDossier + moyparchoix$moyenneTest)/2
+
+head(moyparchoix)
+
+```
+
+
+### **8-Importation de la feuille "choix candidats" qui représente les moyennes par choix(et ordre de choix) des étudiants ayant composé au concours. Cette feuille est pareille à la feuille "tous les choix", seulement qu'ici il y a l'ordre de choix et quelques etudiants n'y sont pas**
+
+```{r}
+moyparchoix2= read_excel(path=lien, sheet= 6)
+#moyparchoix2[moyparchoix2==0]= NA
+#moyparchoix2 = na.omit(moyparchoix2)
+
+head(moyparchoix2)
+
+```
+
+
+### **9-Importation de la feuille "liste candidats admis" qui contient les informations des candidats qui sont finalement admis au concours de l'inp**
+
+```{r}
+candadmis= read_excel(path=lien, sheet= 9)
+head(candadmis)
+
+```
+
+
+
+
+## **Ajout d'une variable admis(qui sera notre variable cible) à la feuille des admis**
+
+```{r}
+inp18 = candadmis
+inp18$admis = rep (1, 598 )
+risk = inp18
+head(inp18)
+
+```
+
+
+
+
+### **jointure de la feuille candidats valides à la feuille des admis et stockage dans la variable inp18**
+```{r}
+inp18= left_join(candval,inp18) 
+
+inp18=as.data.frame(inp18)
+head(inp18)
+
+```
+
+
+
+
+
+## **Transformation des filières choisies par les candidats en variables**
+
+
+
+```{r}
+choix <- dummy_cols(moyparchoix, select_columns = 'codeFiliere')
+choix = choix %>% rename(BCPST="codeFiliere_BCPST", CAE="codeFiliere_CAE", ECS="codeFiliere_ECS", FC="codeFiliere_FC", GC="codeFiliere_GC", MG="codeFiliere_MG", MPSI="codeFiliere_MPSI", STGI="codeFiliere_STGI",STIC="codeFiliere_STIC", TSA="codeFiliere_TSA", STGP="codeFiliere_STGP")
+choix = choix %>% select(identifiantCandidat,BCPST, CAE, ECS, FC, GC, MG, MPSI, STGI, STGP, STIC, TSA)
+choix = choix %>%
+  group_by(identifiantCandidat) %>% 
+  summarize(BCPST = sum(BCPST), CAE = sum(CAE), ECS = sum(ECS), FC = sum(FC), GC = sum(GC), MG = sum(MG), MPSI = sum(MPSI), STGI = sum(STGI), STGP = sum(STGP), STIC = sum(STIC), TSA = sum(TSA))
+head(choix)
+
+```
+
+
+
+
+
+```{r}
+
+inp18= left_join(inp18,choix)
+head(inp18)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+## **Calcul de l'âge des élèves à la date du concours**
+
+```{r}
+inp18$age = rep (1, 5775 )
+naiss <- ymd(inp18$dateNaissance)
+evt <- ymd("2018-01-01")
+inp18$age=ceiling(time_length(interval(naiss, evt), "years")) #arrondi à l'excès
+
+
+head(inp18)
+
+```
+
+
+
+##**Ajout de la variable moyenne dossier**
+
+
+```{r}
+dossier = moyparchoix[,c(1,2)] #echantillon avec uniquement les moyennes des dossiers
+
+#La moyenne des moyennes de dossier par élève
+dossier = dossier %>%
+  group_by(identifiantCandidat) %>% 
+  summarize(meanDossier = mean(moyenneDossier))
+  
+  inp18 = left_join(inp18, dossier)
+
+```
+
+
+##**Ajout de la variable nombre de choix**
+
+```{r}
+
+inp18$nbrechoix = NA
+inp18 = inp18 %>% 
+  mutate(nbrechoix= BCPST+ECS+CAE+FC+GC+MPSI+MG+STGI+STGP+TSA+STIC)
+  
+head(inp18)
+```
+
+
+
+
+##**Description du dataset**
+
+```{r}
+str(inp18)
+summary(inp18)
+```
+
+
+
+
+
+
+
+
+
+
+
+# **Valeurs manquantes**
+
+## **Total valeurs manquantes**
+
+```{r}
+cat('Total Valeurs manquantes -> ', sum(is.na(inp18)))
+```
+
+## **Valeurs manquantes de chaque colonne**
+
+```{r}
+ValM <- sapply(inp18, function(x) sum(is.na(x)))
+ValM
+
+
+```
+## **Gestion des valeurs manquantes**
+
+
+Une méthode un peu plus aventurière consiste à combler les trous par des valeurs à deviner. Mais dans notre cas les valeurs manquantes résultent en majorité de la reformation de notre en tenant compte des admis, et de leurs choix. Ce sont donc des cellules qu'on peut combler grâce à la méthode d'imputation. 
+Nous dévinerons en fonction des valeurs de la variables, quelles valeurs imputer auc cellules.
+
+
+### Colonne admis
+
+<p> les valeurs manquantes de la colonne admis correspondent aux élèves qui n'ont pas eu le concours</p>
+
+```{r}
+
+inp18$admis[is.na(inp18$admis)]=0
+
+ValM <- sapply(inp18, function(x) sum(is.na(x)))
+ValM
+```
+
+### Colonnes Cycle, FiliereAccueil et EcoleAccueil
+
+
+```{r}
+accueil= inp18[which(is.na(inp18$FiliereAccueil)),]
+head(accueil,10)
+```
+
+<p> les valeurs manquantes des colonnes Cycle, FiliereAccueil, EcoleAccueil appartiennent aux élèves non admis, qu'il s'agisse de ceux qui ont composés ou pas.</p>
+<p> Ces valeurs seront remplacées par NEANT </p>
+
+```{r}
+inp18$Cycle[is.na(inp18$Cycle)]="NEANT"
+inp18$FiliereAccueil[is.na(inp18$FiliereAccueil)]="NEANT"
+inp18$EcoleAccueil[is.na(inp18$EcoleAccueil)]="NEANT"
+
+#total
+ValM <- sapply(inp18, function(x) sum(is.na(x)))
+ValM
+```
+
+
+### Colonnes liées aux choix de filière
+
+
+```{r}
+accueil= inp18[which(is.na(inp18$MG)),]
+head(accueil,10)
+```
+
+
+
+
+
+```{r}
+inp18[which(is.na(inp18$etablissementOrigine)),]
+
+
+```
+
+La variable etablissementOrigine est cruciale dans l'analyse, alors mieux vaut créer un sous-échantillon et y supprimer l'individu pour lequel cette variable est manquante. Cette méthode pourrait contenir des risques que notre échantillon ne soit plus représentatif de la population globale. Mais dans notre cas, il ne s'agit que d'un individu sur plus de 5000, et en plus cet individu ne figure pas parmi les admis.
+
+
+### Suppression de la seule valeur manquante restante
+
+
+
+```{r}
+inp18= na.omit(inp18)
+head(inp18)
+
+```
+
+
+### total de valeurs manquantes par colonne
+
+```{r}
+
+
+ValM <- sapply(inp18, function(x) sum(is.na(x)))
+head(ValM)
+```
+
+
+
+
+
+
+
+# **Analyse univariée**
+
+Normalement, vu que nous avons rassemblé toutes nos variables dans une même table, nous devrions faire notre étude uniquement que sur cette table. 
+Mais dans notre cas exceptionnellement, il existe des variables qui ne sont réellement liées qu'aux admis telle que Filière accueil. Alors nous ferons leur analyse dans cette table uniquement et elles ne seront pas concernées par notre analyse bivariée et notre modèle.
+
+## **Création d'un dataframe contenant que les informations des admis**
+
+```{r}
+
+inp18_admis=inp18[inp18$admis==1,]
+head(inp18_admis)
+
+```
+
+
+Le nombre d'admis s'élève à 598.
+
+
+
+Nombre de colonnes du dataframe
+
+```{r}
+colnames(inp18_admis)
+
+```
+
+
+
+Fonction qui permettra de créer une table en fonction des effectifs des modalités d'une variable d'un dataframe et de calculer les pourcentages. 
+Cette fonction nous sera utile pour nos réprésentations graphiques
+
+```{r}
+load_cat = function(frame) {
+    
+  tri_inp18 = frame %>%
+              dplyr::summarise(Effectif = n()) %>%
+              arrange(desc(Effectif)) %>%
+              mutate(pourcentage = paste0(round(Effectif / sum(Effectif) * 100, 1), "%"))
+    
+    return(tri_inp18)
+}
+
+load_cat(inp18_admis %>% select(genre) %>% group_by(genre))
+
+```
+
+
+
+
+## Distribution de la variable Genre
+
+
+```{r}
+freq(inp18$genre, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam_inp5 <-load_cat(inp18 %>% select(genre) %>% group_by(genre))
+cam_inp5 %>%
+  hchart(type = "pie", hcaes(x = paste(genre, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam_inp5$genre, ' (', cam_inp5$pourcentage, ')' )) %>%
+    hc_title(text = "Comment sont repartis les candidats valides selon le genre ?") %>%
+    hc_add_theme(hc_theme_google()) 
+
+
+
+```
+
+
+Au départ on a 5774 candidats valides pour le concours dont 64.4% de garçons et 35.6% de filles. Les garçons sont donc mieux représentés que les filles.
+
+
+
+
+
+
+
+## Distribution de la variable Etablissement d'origine
+
+```{r}
+
+freq(inp18$etablissementOrigine, valid = FALSE, total = TRUE, sort = 'dec')
+
+
+se_inp18 <- load_cat(inp18 %>% select(etablissementOrigine) 
+                  %>% group_by(etablissementOrigine))
+
+ se_inp18 %>%
+   filter(pourcentage >= 1 ) %>%
+   hchart(type = "line", hcaes(x = paste(etablissementOrigine, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(se_inp18$etablissementOrigine, ' (', se_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Repartition des candidats par école d'origine ", align = "center",
+    style = list(color = "#22A884", useHTML = TRUE)) %>%
+    hc_add_theme(hc_theme_google()) 
+ 
+
+  
+
+ 
+
+```
+Le nombre de modalités de cette variable est de 759. Au niveau des modalités les plus représentées, nous observons 364 candidats au niveau du lycée Classique (6.3%) qui est suivi de loin par le LYCEE SCIENTIFIQUE YAMOUSSOUKRO, le LYCEE TECHNIQUE COCODY, le LYCEE TECHNIQUE BOUAKE, le LYCEE MODERNE JEUNES FILLES YOPOUGON et le LYCEE MAMIE ADJOUA YAMOUSSOUKRO qui ont tous vu une centaine de leurs étudiants concourir. 
+Les moins représentées sont très nombreux avec une seul représentation chacune. On peut citer par exemple LYCEE TECHNIQUE SAINT JACQUES BOUAKE et SAINTE MARIE DE RATOMA.
+
+
+## Distribution de la variable Nationalité
+
+
+```{r}
+freq(inp18$Nationalite, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam_inp18 <-load_cat(inp18 %>% select(Nationalite) %>% group_by(Nationalite))
+cols <- plasma(3)
+cols <- substr(cols, 0, 9)
+cam_inp18 %>%
+  hchart(type = "pie", hcaes(x = paste(Nationalite, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam_inp18$genre, ' (', cam_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Repartition des candidats en fonction de la nationalité ") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+```
+
+Le nombre de modalités de cette variable est de 11. La seule modalité la mieux représentée est bien évidemment la nationalité ivoirienne avec 5708 concourants. 
+Les autres, toutes en sous-effectif, ont leur nombre de modalités compris dans l'intervalle [1;17]. La Sierra Leone, le Niger et le Sénégal, ont le plus mauvais effectif.
+
+
+## Distribution de la variable cycle
+
+
+```{r}
+
+
+#le cycle ne concerne que les admis
+cam_inp18 <-load_cat(inp18_admis %>% select(Cycle) %>% group_by(Cycle))
+cols <- turbo(3)
+cols <- substr(cols, 0, 7)
+
+cam_inp18 %>%
+  hchart(type = "line", hcaes(x = paste(Cycle, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam_inp18$Cycle, ' (', cam_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Repartition des admis par cycle choisi ") %>%
+    hc_add_theme(hc_theme_ffx()) %>%
+    hc_colors(cols)
+    
+
+```
+
+
+Il y a une différence considérable entre le nombre d'admis en classe préparatoire qui est supérieur au à celui des admis en cycle court.
+
+
+
+
+```{r}
+
+#uniquement pour les admis
+
+cam_inp18 <-load_cat(inp18_admis %>% select(EcoleAccueil) %>% group_by(EcoleAccueil))
+cols <- rocket(4)
+cols <- substr(cols, 0, 9)
+cam_inp18 %>%
+  hchart(type = "pie", hcaes(x = paste(EcoleAccueil, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam_inp18$EcoleAccueil, ' (', cam_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Quel est le pourcentage d'admis par Ecole d'accueil ?",align = "center")%>%
+    hc_add_theme(hc_theme_538()) %>%
+    hc_colors(cols)
+
+```
+
+
+
+
+L'école qui accueille le plus d'étudiants est l'école des classes préparatoires (CPGE) avec 58.2%.
+Ce qui est justifié car Les écoles les moins représentées ne reçoivent que les étudiants du cycle court pendant que CPGE accueille ceux des classes prépas.
+
+
+
+
+
+## Distribution de la variable mention au bac
+
+
+
+
+```{r}
+
+freq(inp18$mentionAuBac, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam1_inp18 <-load_cat(inp18 %>% select(mentionAuBac) %>% group_by(mentionAuBac))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "column", hcaes(x = paste(mentionAuBac, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$mentionAuBac, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Repartition des candidats selon la mention au bac") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+    
+
+```
+
+
+
+
+
+
+
+Cette variable n'a que 4 modalités réprésentant la mention d'un individu au bac.Plus la valeur de la mention croît, le nombre d'apparition décroit. Alors la modalité la plus représentée (à 56.9%) est la mention passable et la moins représentée (0.2%) est la mention très bien.
+
+
+
+
+
+
+
+
+
+
+
+
+## Distribution de la variable Série
+
+
+
+
+
+```{r}
+
+freq(inp18$serie, valid = FALSE, total = TRUE, sort = 'dec')
+
+
+cam_inp18 <-load_cat(inp18 %>% select(serie) %>% group_by(serie))
+cols <- viridis(3)
+cols <- substr(cols, 0, 9)
+
+cam_inp18 %>%
+  hchart(type = "pie", hcaes(x = paste(serie, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam_inp18$serie, ' (', cam_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Repartition des candidats par série ") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+    
+
+```
+
+
+
+
+
+Sur un total de 31 modalités, les séries les plus repréentées et qui se distinguent carrément des autres sont les séries D et c avec respectivement 2614 candidats soit 45.3% et 1328 candidats soit 23%. Aussi, il y a 9 séries qui ne sont représentées qu'une seule fois.
+
+
+
+
+
+
+
+
+
+
+
+
+## Distribution de la variable Filère accueil
+
+
+
+```{r}
+
+# la filière d'accueil ne concerne que les admis
+
+cam_inp18 <-load_cat(inp18_admis %>% select(FiliereAccueil) %>% group_by(FiliereAccueil))
+cols <- cividis(3)
+cols <- substr(cols, 0, 7)
+
+cam_inp18 %>%
+  hchart(type = "pie", hcaes(x = paste(FiliereAccueil, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam_inp18$FiliereAccueil, ' (', cam_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Repartition des admis par Filière d'accueil") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+    
+
+```
+
+La filière qui accueille le plus d'étudiants est MPSI, avec 160 admis, soit 26.8% sur un total de 598 admis. Celles qui en accueillent le moins sont STGP, MG, et FC avec 3.3%, c'est à dire 20 étudiants.
+
+
+## Distribution de la variable rang en terminale
+
+
+
+```{r}
+#Candidats valides par rang en terminale
+
+freq(inp18$rangEnTerminale, valid = FALSE, total = TRUE, sort = 'dec')
+
+
+cam_inp18 <-load_cat(inp18 %>% select(rangEnTerminale) %>% group_by(rangEnTerminale))
+
+cam_inp18 %>%
+  hchart(type = "column", hcaes(x = paste(rangEnTerminale, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam_inp18$rangEnTerminale, ' (', cam_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Repartition des candidats selon le rang") %>%
+    hc_add_theme(hc_theme_bloom()) 
+
+```
+Le nombre de modalités de cette variable est de 63. Elles prennent leur valeur dans l'intervalle du premier rang au 80 ème rang. 
+Les premiers de classe sont les plus représentés au concours, suivis par les 2èmes, puis les 3èmes, et cet ordre est respecté jusqu'aux 16èmes de classe.
+Les 48, 58, 65, 68, 70, et 80èmes rang sont les moins représentés avec une seule ligne.
+
+
+
+
+## Distribution de la variable redoublement en terminal
+
+```{r}
+#Candidats valides par redoublement en terminale
+freq(inp18$redoublementTerminale, valid = FALSE, total = TRUE, sort = 'dec')
+
+
+cam_inp18 <-load_cat(inp18 %>% select(redoublementTerminale) %>% group_by(redoublementTerminale))
+
+cam_inp18 %>%
+  hchart(type = "line", hcaes(x = paste(redoublementTerminale, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam_inp18$redoublementTerminale, ' (', cam_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Les candidats sont-ils en majorité des redoublants ?") %>%
+    hc_add_theme(hc_theme_flat()) 
+
+```
+Le nombre de modalités de cette variable est uniquement de 2. Les candidats au concours sont en majorité des non redoublants avec un taux de 85%.
+
+
+
+## Distribution de la variable Age
+
+```{r}
+summary(inp18$age)
+
+ggplot(data = inp18, aes(x = factor(1), y = age, fill = age)) +
+geom_boxplot()
+
+```
+
+
+
+L'âge minimum est de 14 ans chez les candidats valides tandis que le maximum est de 22.
+Le 1er quartile, la médiane, et le 3ème quartile sont respectivement à 17, 18 et 19.
+Donc on peut conclure que:
+Au moins 25% des individus ont 17 ans maximum.
+Au moins 50% des individus ont leur âge qui est inférieur ou égal à 18 ans. 
+Au moins 75% des individus ont 19 ans maximum. 
+
+
+
+
+
+## Distribution de la variable meanDossier
+
+```{r}
+summary(inp18$meanDossier)
+
+ggplot(data = inp18, aes(x = factor(1), y = meanDossier, fill = meanDossier)) +
+geom_boxplot()
+
+```
+La moyenne dossier minimum est de 6,351 chez les candidats valides tandis que le maximum est de 18,392.
+Au moins 25% des individus ont 11,177 maximum.
+Au moins 50% des individus ont leur moyenne qui est inférieure ou égale à 12,181. 
+Au moins 75% des individus ont 13,300 maximum. 
+
+
+
+
+## Distribution de la variable nombre de choix
+
+```{r}
+
+
+cam_inp18 <-load_cat(inp18 %>% select(nbrechoix) %>% group_by(nbrechoix))
+cols <- cividis(3)
+cols <- substr(cols, 0, 7)
+
+cam_inp18 %>%
+  hchart(type = "pie", hcaes(x = paste(nbrechoix, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam_inp18$nbrechoix, ' (', cam_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Repartition des candidats par nombre de choix") %>%
+    hc_add_theme(hc_theme_bloom()) %>%
+    hc_colors(cols)
+
+
+```
+
+
+Les candidats à avoir fait 9 choix sont les plus nombreux avec 35%.
+
+## Distribution des variables issues de la récodification du choix de filière 
+
+
+```{r}
+
+#BCPST
+
+freq(inp18$BCPST, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam1_inp18 <-load_cat(inp18 %>% select(BCPST) %>% group_by(BCPST))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "column", hcaes(x = paste(BCPST, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$BCPST, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'élèves ont choisi BCPST") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+    
+#CAE
+
+freq(inp18$CAE, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam1_inp18 <-load_cat(inp18 %>% select(CAE) %>% group_by(CAE))
+cols <- magma(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(CAE, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$CAE, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'élèves ont choisi CAE") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+    
+
+#ECS
+
+freq(inp18$ECS, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam1_inp18 <-load_cat(inp18 %>% select(ECS) %>% group_by(ECS))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(ECS, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$CAE, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'élèves ont choisi ECS") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+
+#FC
+
+freq(inp18$FC, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam1_inp18 <-load_cat(inp18 %>% select(FC) %>% group_by(FC))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(FC, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$FC, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'élèves ont choisi FC") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+#GC
+
+freq(inp18$GC, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam1_inp18 <-load_cat(inp18 %>% select(GC) %>% group_by(GC))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(GC, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$GC, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'élèves ont choisi GC") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+
+#MG
+
+freq(inp18$MG, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam1_inp18 <-load_cat(inp18 %>% select(MG) %>% group_by(MG))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(MG, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$MG, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'élèves ont choisi MG") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+#MPSI
+
+freq(inp18$MPSI, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam1_inp18 <-load_cat(inp18 %>% select(MPSI) %>% group_by(MPSI))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(MPSI, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$MPSI, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'élèves ont choisi MPSI") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+
+
+#STGP
+
+freq(inp18$STGP, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam1_inp18 <-load_cat(inp18 %>% select(STGP) %>% group_by(STGP))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(STGP, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$STGP, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'élèves ont choisi STGP") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+
+#STGI
+
+freq(inp18$STGI, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam1_inp18 <-load_cat(inp18 %>% select(STGI) %>% group_by(STGI))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(STGI, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$STGI, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'élèves ont choisi STGI") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+
+#STIC
+
+freq(inp18$STIC, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam1_inp18 <-load_cat(inp18 %>% select(STIC) %>% group_by(STIC))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(STIC, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$STIC, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'élèves ont choisi STIC") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+#TSA
+
+freq(inp18$TSA, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam1_inp18 <-load_cat(inp18 %>% select(TSA) %>% group_by(TSA))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(TSA, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$TSA, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'élèves ont choisi TSA") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+```
+
+
+
+
+
+
+
+
+# **Analyse bivariée**
+
+La nature des variables influence sur les méthodes que nous allons choisir.
+Mais cette partie consistera majoritairement à faire un tableau croisé, un test du khi deux, et à donner les résidus du test du khi deux entre notre variable admis et les autres variables de la table inp18. Nous finirons par donner le ratio d'admis selon les différentes modalités de nos variables, afin de voir les statistiques des meilleurs au concours.
+Pour la variable age, qui est quantitative, nous choisirons une autre méthode que nous décrirons plutard.
+
+## Variable Genre
+
+### Tableau croisé
+
+Un tableau de contingence ou tableau croisé est une méthode de représentation de données issues d'un comptage permettant d'estimer la dépendance entre deux variables..
+
+```{r}
+# Croisement avec la variable genre
+tab2 <- table(inp18$admis, inp18$genre)
+head(lprop(tab2))
+```
+
+
+Comme on le voit,il y a 35,55% de femmes et 64% d'hommes dans l'ensemble, et parmi les admis, il y en a respectivement 25 % et environ 75 %.
+
+### Représentation Graphique
+
+```{r}
+
+cam_inp1 <-load_cat(inp18_admis %>% select(genre) %>% group_by(genre))
+
+cam_inp1 %>%
+  hchart(type = "pie", hcaes(x = paste(genre, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam_inp1$genre, ' (', cam_inp1$pourcentage, ')' )) %>%
+    hc_title(text = "Comment sont repartis les admis selon le genre ?") %>%
+    hc_add_theme(hc_theme_bloom()) 
+```
+
+
+
+
+### Test du Khi-deux
+
+Ce test permet de rejeter ou d'accepter l’hypothèse d’indépendance entre les variables soumises au test.
+X-squared est la valeur de la statistique du χ² pour notre tableau croisé. C'est la  “distance” entre notre tableau observé et celui attendu si les deux variables étaient indépendantes.
+df, le nombre de degrés de liberté du test.
+p-value, qui indique la probabilité d’obtenir une valeur de la statistique du χ² sous l’hypothèse d’indépendance.
+
+```{r}
+chisq.test(tab2)
+```
+
+
+
+La p-value étant extrêmement petite, on peut donc rejeter l’hypothèse d’indépendance des lignes et des colonnes du tableau.
+On conclut que le genre est un facteur déterminant de l'admission ou non d'une personne au concours.
+
+
+
+### Résidus du test du Khi-deux
+
+En complément du test du χ², on peut aussi regarder les résidus de ce test pour affiner la lecture du tableau.
+
+L’interprétation des résidus est la suivante :
+
+Si la valeur du résidu pour une modalité est inférieure à -2, alors il y a une sous-représentation de cette modalité dans le tableau : les effectifs sont significativement plus faibles que ceux attendus sous l’hypothèse d’indépendance.
+A l’inverse, si le résidu est supérieur à 2, il y a sur-représentation de cette case.
+Si le résidu est compris entre -2 et 2, il n’y a pas d’écart à l’indépendance significatif. 
+
+
+
+```{r}
+res2 =chisq.residuals(tab2)
+res2
+```
+
+
+
+La valeur du résidu est inférieure à -2 chez les femmes et supérieure à 2 chez les hommes.
+Il y a alors une sous-représentation des femmes chez les admis dans le tableau : les effectifs sont significativement plus faibles que ceux attendus sous l’hypothèse d’indépendance. Et c'est tout à fait le contraire chez les hommes. 
+
+Ceci vient confirmer les résultats de notre test de khi-deux.
+
+
+
+### Meilleur ratio d'admis au concours selon le genre
+
+Est ce que la différence flagrante entre les admis hommes et femmes est dûe seulement au fait que l'effectif des garçons valides pour le concours est supérieur à celui des filles?
+Pour cela nous oberverons les pourcentages d'admis groupés par genre. 
+
+```{r}
+
+
+#effectif et fréquence des candidats, groupés par genre et résultat d'admission
+inp18 %>%
+  group_by(genre ,admis) %>%
+  summarise (effectif = n()) %>%
+  mutate(frequence = effectif / sum(effectif))
+
+
+```
+
+
+Les 0.07% d'admis sur 2053 filles et 0.12% sur 3721 garçons nous montrent que les garçons ont mieux travaillé que les filles. 
+Mais au vu du résultats des résidus, la sur-représentation des hommes ajouté à la sous-représentation des femmes nous permet d'affirmer que les effectifs pourraient y être pour beaucoup.
+
+Conclusion : On ne peut pas affirmer que les hommes sont meilleurs que les femmes même s'ils ont un meilleur ratio d'admission.
+
+
+
+
+
+
+
+## Variable Nationalité
+
+### Tableau croisé
+
+
+```{r}
+# Croisement avec la variable Nationalité
+
+tab1 <- table(inp18$admis, inp18$Nationalite)
+head(lprop(tab1))
+
+```
+
+
+Les ivoiriens sont largement majoritaire dans l'ensemble et parmi les admis avec un taux constant de plus de 98%.
+
+### Représentation Graphique
+
+```{r}
+
+#freq(inp18_admis$Nationalite, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam_inp18 <-load_cat(inp18_admis %>% select(Nationalite) %>% group_by(Nationalite))
+cols <- plasma(3)
+cols <- substr(cols, 0, 9)
+cam_inp18 %>%
+  hchart(type = "pie", hcaes(x = paste(Nationalite, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam_inp18$genre, ' (', cam_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Repartition des admis en fonction de la nationalité ") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+```
+
+
+
+
+### Test du Khi-deux
+
+
+```{r}
+chisq.test(tab1)
+```
+
+
+
+La p-value étant inférieure au seuil par défaut, on peut donc rejeter l’hypothèse d’indépendance des lignes et des colonnes du tableau.
+On conclut que la nationalité est un facteur légèrement déterminant de l'admission ou non d'une personne au concours.
+
+
+
+### Résidus du test du Khi-deux
+
+
+```{r}
+res1 =chisq.residuals(tab1)
+head(res1)
+```
+
+Ici on remarque que hormis la guinée et le sénégal, les effectifs des autres nationalités tendent vers ceux attendus sous l'hypothèse H0 d'indépendance. D'où le résultat du test du khi-deux qui est très légèrement inférieur à 0.05.
+
+On peut conclure que si la nationalité est un facteur déterminant de l'admission ou non d'une personne au concours, celà est dû au sénégal et à la Guinée.
+
+
+
+
+
+### Meilleur ratio d'admis au concours selon la nationalité
+
+
+
+```{r}
+
+
+inp18 %>%
+  group_by(Nationalite ,admis) %>%
+  summarise (effectif = n()) %>%
+  mutate(frequence = effectif / sum(effectif))
+
+
+```
+
+
+On ne peut affirmer au vu de la disparité au niveau des représentations, que le Sénégal et la Guinée sont les meilleurs. Néanmoins ces deux pays ont les meilleurs ratios.
+
+
+
+
+
+
+
+
+## Variable Série
+
+### Tableau croisé
+
+
+```{r}
+# Croisement avec la variable série
+
+tab3 <- table(inp18$admis, inp18$serie)
+head(lprop(tab3))
+
+```
+
+
+La série D est majoritaire dans l'ensemble (45%) et parmi les admis c'est la série C qui mène les débats avec plus de 43%
+
+### Représentation Graphique
+
+```{r}
+
+
+cam_inp18 <-load_cat(inp18_admis %>% select(serie) %>% group_by(serie))
+cols <- viridis(3)
+cols <- substr(cols, 0, 9)
+
+cam_inp18 %>%
+  hchart(type = "pie", hcaes(x = paste(serie, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam_inp18$serie, ' (', cam_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Repartition des admis par série") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+    
+```
+
+
+
+
+### Test du Khi-deux
+
+
+```{r}
+chisq.test(tab3)
+```
+
+
+
+La p-value étant largement inférieure au seuil par défaut, on peut donc rejeter l’hypothèse d’indépendance des lignes et des colonnes du tableau.
+On conclut que la série du bac est un facteur très déterminant de l'admission ou non d'une personne au concours.
+
+
+
+### Résidus du test du Khi-deux
+
+
+```{r}
+res3 =chisq.residuals(tab3)
+head(res3)
+```
+
+On peut conclure que si la série est un facteur déterminant de l'admission ou non d'une personne au concours, celà est en partie dû aux séries A1, A2, B, BT CONTROLE QUALITE, BT GESTION DE PRODUCTION, BT TOPOGRAPHIE, C, D, E, F1, F3, F7 et G2, qui sont soit sur-représentées, soit sous-représentées. 
+
+
+
+
+### Meilleur ratio d'admis au concours selon la série
+
+
+
+```{r}
+
+
+ratioserie = inp18 %>%
+  group_by(serie ,admis) %>%
+  summarise (effectif = n()) %>%
+  mutate(frequence = effectif / sum(effectif))
+kable(ratioserie)
+
+```
+
+
+On ne peut affirmer au vu de la disparité au niveau des représentations, que BT CONTROLE QUALITE, BT GESTION DE PRODUCTION, BT TOPOGRAPHIE sont les meilleurs, Néanmoins ces filières ont les meilleurs ratios.
+
+
+
+
+
+
+
+## Variable Etablissement d'origine
+
+### Tableau croisé
+
+
+```{r}
+# Croisement avec la variable Etablissement d'origine
+
+tab4 <- table(inp18$admis, inp18$etablissementOrigine)
+#head(lprop(tab4))
+
+```
+
+
+Les élèves du Lycée classique sont largement majoritaires dans l'ensemble avec plus de 6% de représentation et parmi les admis, c'est le Lycée Scientifique avec un taux supérieur à 9%.
+
+### Représentation Graphique
+
+```{r}
+
+
+se_inp18 <- load_cat(inp18_admis %>% select(etablissementOrigine) 
+                  %>% group_by(etablissementOrigine))
+
+ se_inp18 %>%
+   filter(pourcentage >= 1 ) %>%
+   hchart(type = "line", hcaes(x = paste(etablissementOrigine, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(se_inp18$etablissementOrigine, ' (', se_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Repartition des admis par école d'origine ", align = "center",
+    style = list(color = "#22A884", useHTML = TRUE)) %>%
+    hc_add_theme(hc_theme_google()) 
+    
+```
+
+
+
+
+### Test du Khi-deux
+
+
+```{r}
+chisq.test(tab4)
+```
+
+
+
+La p-value étant supérieure au seuil par défaut, on peut accepter l’hypothèse d’indépendance des lignes et des colonnes du tableau.
+
+Sans tirer de conclusion à la hâte, nous vérifierons les résidus du test.
+
+
+
+### Résidus du test du Khi-deux
+
+
+```{r}
+res4 =chisq.residuals(tab4)
+#res4
+res4 = as.data.frame(res4)
+res4 %>%
+   filter( Freq < -2 )
+res4 %>%
+   filter( Freq > 2 )
+```
+
+Ici on remarque que sur 759 modalités, seulement 37 ne tendent pas vers ceux attendus sous l'hypothèse H0 d'indépendance. D'où le résultat du test du khi-deux. On peut donc conclure que la variable établissement d'origine n'a pas d'impact sur les admissions au concours. 
+
+
+
+
+
+
+### Meilleur ratio d'admis au concours selon l'établissement d'origine
+
+Création d'un échantillon avec les modalités les plus représentées au concours et parmi les admis.
+
+```{r}
+
+
+origine = inp18 %>% 
+  filter(etablissementOrigine %in% c("LYCEE CLASSIQUE ABIDJAN", "LYCEE SCIENTIFIQUE YAMOUSSOUKRO", "LYCEE TECHNIQUE COCODY","LYCEE TECHNIQUE BOUAKE","LYCEE MODERNE JEUNES FILLES YOPOUGON","LYCEE MAMIE ADJOUA YAMOUSSOUKRO","LYCEE SAINTE MARIE ABIDJAN", "LYCEE HOUPHOUET BOIGNY KORHOGO","COLLEGE SAINT VIATEUR COCODY","LYCEE MAMIE FÊTAI BINGERVILLE","LYCEE CLASSIQUE ET MODERNE 1 BOUAKE", "LYCEE MIXTE -I YAMOUSSOUKRO","LYCEE GARCONS BINGERVILLE"))
+
+origine = origine %>%
+  group_by(etablissementOrigine ,admis) %>%
+  summarise (effectif = n()) %>%
+  mutate(frequence = effectif / sum(effectif))
+head(origine)
+
+```
+
+
+Le LYCEE SAINTE MARIE ABIDJAN suivi de près par le COLLEGE SAINT VIATEUR COCODY, sont en tête des ratios des admis par école d'origine.
+
+
+
+
+
+
+
+
+
+## Variable mention au bac
+
+### Tableau croisé
+
+
+```{r}
+# Croisement avec la variable mention au bac
+
+tab5 <- table(inp18$admis, inp18$mentionAuBac)
+head(lprop(tab5))
+
+```
+
+
+La mention passable dans l'ensemble et la mention Assez-bien chez les admis, sont les mieux représentées avec chacun plus de 56%.
+
+### Représentation Graphique
+
+```{r}
+
+cam1_inp18 <-load_cat(inp18_admis %>% select(mentionAuBac) %>% group_by(mentionAuBac))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(mentionAuBac, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$mentionAuBac, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Repartition des admis selon la mention au bac") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+    
+    
+```
+
+
+
+
+### Test du Khi-deux
+
+
+```{r}
+chisq.test(tab5)
+```
+
+
+
+La p-value étant inférieure au seuil par défaut, on peut donc rejeter l’hypothèse d’indépendance des lignes et des colonnes du tableau.
+On conclut que la mention est un facteur très déterminant de l'admission ou non d'une personne au concours.
+
+
+
+### Résidus du test du Khi-deux
+
+
+```{r}
+res5 =chisq.residuals(tab5)
+res5
+```
+
+Ces résidus vérifient notre hypothèse H1. Les variables admis et mention au bac sont réellement dépendantes.
+
+
+
+
+
+### Meilleur ratio d'admis au concours selon la mention au bac
+
+
+
+```{r}
+
+inp18 %>%
+  group_by(mentionAuBac ,admis) %>%
+  summarise (effectif = n()) %>%
+  mutate(frequence = effectif / sum(effectif))
+
+
+```
+
+
+Les élèves avec la mention très bien au Bac, ont le meilleur ratio d'admission, ce qui paraît justifié malgré les différences d'effectif, car on peut considérer qu'un élève avec la mention très bien est meilleur que les autres avec une mention inférieure.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Variable rang en terminale
+
+### Tableau croisé
+
+
+```{r}
+
+
+tab6 <- table(inp18$admis, inp18$rangEnTerminale)
+head(lprop(tab6))
+
+```
+
+
+Les 1ers sont largement majoritaires dans l'ensemble et parmi les admis avec des taux respectifs de plus de 15% et 34%.
+
+### Représentation Graphique
+
+```{r}
+
+cam_inp18 <-load_cat(inp18_admis %>% select(rangEnTerminale) %>% group_by(rangEnTerminale))
+
+cam_inp18 %>%
+  hchart(type = "column", hcaes(x = paste(rangEnTerminale, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam_inp18$rangEnTerminale, ' (', cam_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Repartition des admis selon le rang") %>%
+    hc_add_theme(hc_theme_bloom()) 
+    
+```
+
+
+
+
+### Test du Khi-deux
+
+
+```{r}
+chisq.test(tab6)
+```
+
+
+
+La p-value étant inférieure au seuil par défaut, on peut donc rejeter l’hypothèse d’indépendance des lignes et des colonnes du tableau.
+On conclut que le rang en terminale est un facteur grandement déterminant de l'admission ou non d'une personne au concours.
+
+
+
+### Résidus du test du Khi-deux
+
+
+```{r}
+res6 =chisq.residuals(tab6)
+head(res6)
+```
+
+On peut conclure que si le rang est un facteur déterminant de l'admission ou non d'une personne au concours, celà est dû au fait que certains rangs (1er, 2ème, 19ème, etc...) sont fortement sur-représentés ou sous-représentés parmi les admis.
+
+
+
+
+
+### Meilleur ratio d'admis au concours selon le rang
+
+
+
+```{r}
+
+rang= inp18 %>%
+  group_by(rangEnTerminale ,admis) %>%
+  summarise (effectif = n()) %>%
+  mutate(frequence = effectif / sum(effectif))
+rang 
+
+```
+
+
+Les élèves avec la mention très bien au Bac, ont le meilleur ratio d'admission, ce qui paraît justifié malgré les différences d'effectif, car on peut considérer qu'un élève avec la mention très bien est meilleur que les autres avec une mention inférieure.
+
+
+
+
+
+
+
+
+
+
+## Variable redoublement en terminale
+
+### Tableau croisé
+
+
+```{r}
+
+tab7 <- table(inp18$admis, inp18$redoublementTerminale)
+head(lprop(tab7))
+
+```
+
+
+Les non-redoublants sont largement majoritaires à tous les niveaux
+
+### Représentation Graphique
+
+```{r}
+
+
+cam_inp18 <-load_cat(inp18_admis %>% select(redoublementTerminale) %>% group_by(redoublementTerminale))
+
+cam_inp18 %>%
+  hchart(type = "line", hcaes(x = paste(redoublementTerminale, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam_inp18$redoublementTerminale, ' (', cam_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Les admis sont-ils en majorité des redoublants ?") %>%
+    hc_add_theme(hc_theme_flat()) 
+    
+```
+
+
+
+
+### Test du Khi-deux
+
+
+```{r}
+chisq.test(tab7)
+```
+
+
+
+La p-value étant inférieure au seuil par défaut, on peut donc rejeter l’hypothèse d’indépendance des lignes et des colonnes du tableau.
+On conclut que la variable redoublement est un facteur déterminant de l'admission ou non d'une personne au concours.
+
+
+
+### Résidus du test du Khi-deux
+
+
+```{r}
+res4 =chisq.residuals(tab7)
+res4
+```
+
+Ces résidus vérifient le test de khi-2 car sont différents de ceux attendus sous l'hypothèse H0 d'indépendance. 
+
+
+
+
+### Meilleur ratio d'admis au concours selon la variable redoublement Terminale
+
+
+
+```{r}
+
+inp18 %>%
+  group_by(redoublementTerminale ,admis) %>%
+  summarise (effectif = n()) %>%
+  mutate(frequence = effectif / sum(effectif))
+
+
+```
+
+
+Les non-redoublants ont un ratio d'admission largement meilleur.
+
+
+
+
+## Avec les variables Dummy du choix de Filière
+
+### Tableau croisé
+
+
+```{r}
+#BCPST
+tab10 <- table(inp18$admis, inp18$BCPST)
+head(lprop(tab10))
+
+#CAE
+tab11 <- table(inp18$admis, inp18$CAE)
+head(lprop(tab11))
+
+#ECS
+tab12 <- table(inp18$admis, inp18$ECS)
+head(lprop(tab12))
+
+
+#FC
+tab13 <- table(inp18$admis, inp18$FC)
+head(lprop(tab13))
+
+
+#GC
+tab14 <- table(inp18$admis, inp18$GC)
+head(lprop(tab14))
+
+
+#MG
+tab15 <- table(inp18$admis, inp18$MG)
+head(lprop(tab15))
+
+
+#MPSI
+tab16 <- table(inp18$admis, inp18$MPSI)
+head(lprop(tab16))
+
+
+#STGI
+tab17 <- table(inp18$admis, inp18$STGI)
+head(lprop(tab17))
+
+#STGP
+tab18 <- table(inp18$admis, inp18$STGP)
+head(lprop(tab18))
+
+#STIC
+tab19 <- table(inp18$admis, inp18$STIC)
+head(lprop(tab19))
+
+#TSA
+tab20 <- table(inp18$admis, inp18$TSA)
+head(lprop(tab20))
+
+
+
+
+
+```
+
+
+
+### Représentation Graphique
+
+```{r}
+
+
+#BCPST
+
+cam1_inp18 <-load_cat(inp18_admis %>% select(BCPST) %>% group_by(BCPST))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "column", hcaes(x = paste(BCPST, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$BCPST, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'admis ont choisi BCPST") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+    
+#CAE
+
+cam1_inp18 <-load_cat(inp18_admis %>% select(CAE) %>% group_by(CAE))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(CAE, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$CAE, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'admis ont choisi CAE") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+    
+
+#ECS
+
+cam1_inp18 <-load_cat(inp18_admis %>% select(ECS) %>% group_by(ECS))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(ECS, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$CAE, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'admis ont choisi ECS") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+
+#FC
+
+
+cam1_inp18 <-load_cat(inp18_admis %>% select(FC) %>% group_by(FC))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(FC, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$FC, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'admis ont choisi FC") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+#GC
+
+cam1_inp18 <-load_cat(inp18_admis %>% select(GC) %>% group_by(GC))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(GC, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$GC, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'admis ont choisi GC") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+
+#MG
+
+cam1_inp18 <-load_cat(inp18_admis%>% select(MG) %>% group_by(MG))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(MG, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$MG, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'admis ont choisi MG") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+#MPSI
+
+cam1_inp18 <-load_cat(inp18_admis%>% select(MPSI) %>% group_by(MPSI))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(MPSI, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$MPSI, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'admis ont choisi MPSI") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+
+
+#STGP
+
+freq(inp18$STGP, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam1_inp18 <-load_cat(inp18_admis %>% select(STGP) %>% group_by(STGP))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(STGP, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$STGP, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'admis ont choisi STGP") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+
+#STGI
+
+freq(inp18$STGI, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam1_inp18 <-load_cat(inp18_admis %>% select(STGI) %>% group_by(STGI))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(STGI, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$STGI, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'admis ont choisi STGI") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+
+#STIC
+
+freq(inp18$STIC, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam1_inp18 <-load_cat(inp18_admis %>% select(STIC) %>% group_by(STIC))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(STIC, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$STIC, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'admis ont choisi STIC") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+#TSA
+
+freq(inp18$TSA, valid = FALSE, total = TRUE, sort = 'dec')
+
+cam1_inp18 <-load_cat(inp18_admis%>% select(TSA) %>% group_by(TSA))
+cols <- viridis(3)
+cols <- substr(cols, 0, 7)
+
+cam1_inp18 %>%
+  hchart(type = "bar", hcaes(x = paste(TSA, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam1_inp18$TSA, ' (', cam1_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Combien d'admis ont choisi TSA") %>%
+    hc_add_theme(hc_theme_google()) %>%
+    hc_colors(cols)
+
+
+    
+```
+
+
+
+
+
+
+## Variable nombre de choix
+
+### Tableau croisé
+
+
+```{r}
+
+tab22 <- table(inp18$admis, inp18$nbrechoix)
+head(lprop(tab22))
+
+```
+Les élèves admis et ceux qui ont échoué, ont en majorité fait 9 choix.
+
+
+### Représentation graphique
+
+
+```{r}
+
+
+cam_inp18 <-load_cat(inp18_admis %>% select(nbrechoix) %>% group_by(nbrechoix))
+cols <- cividis(3)
+cols <- substr(cols, 0, 7)
+
+cam_inp18 %>%
+  hchart(type = "pie", hcaes(x = paste(nbrechoix, ' \t(', pourcentage, ')' ), y = Effectif)) %>%
+    hc_xAxis(categories = paste(cam_inp18$nbrechoix, ' (', cam_inp18$pourcentage, ')' )) %>%
+    hc_title(text = "Repartition des admis selon nombre de choix") %>%
+    hc_add_theme(hc_theme_bloom()) %>%
+    hc_colors(cols)
+
+
+```
+
+
+Les candidats à avoir fait 9 choix ont le meilleur taux d'admission avec 49%.
+
+
+
+
+### Test du Khi-deux
+
+
+```{r}
+
+chisq.test(tab22)
+
+```
+
+
+
+La p-value étant inférieure au seuil par défaut, on peut donc rejeter l’hypothèse d’indépendance des lignes et des colonnes du tableau.
+On conclut que le nombre de choix est un facteur très déterminant de l'admission ou non d'une personne au concours.
+
+
+
+### Résidus du test du Khi-deux
+
+
+```{r}
+res22 =chisq.residuals(tab22)
+res22
+```
+Ces résidus vérifient le test de khi-2 car sont pour la majorité différents de ceux attendus sous l'hypothèse H0 d'indépendance. 
+
+
+
+
+### Meilleur ratio d'admission au concours selon le nombre de choix
+
+
+
+```{r}
+
+nbrec= inp18 %>%
+  group_by(nbrechoix ,admis) %>%
+  summarise (effectif = n()) %>%
+  mutate(frequence = effectif / sum(effectif))
+nbrec
+
+```
+
+
+Ici on voit que le meilleur ratio est detenu par les élèves ayant fait 4 choix, même s'il faut notifier la différence d'effectif d'avec les autres.
+
+
+
+
+## Les variables quantitatives
+
+Croiser une variable quantitative et une variable qualitative, c’est essayer de voir si les valeurs de la variable quantitative se répartissent différemment selon la catégorie d’appartenance de la variable qualitative.
+
+Pour cela, l’idéal est de commencer par une représentation graphique de type “boîte à moustache”.
+
+### La variable Age
+
+
+#### Représentation graphique
+
+```{r}
+boxplot(inp18$age ~ inp18$admis)
+```
+
+Dans le graphique ci-dessus, on voit que les moyennes d'âge sont quasiment semblables. La seule différence remarquable c'est le minimum qui est de 14 pour les candidats non retenues et 15 pour les admis.
+
+
+
+
+#### Calculs d’indicateurs
+
+Calculons la moyenne d’âge pour les admis et pour ceux qui ont échoué et pour ceux qui n’en pratiquent pas.
+
+```{r}
+tapply(inp18$age, inp18$admis, mean)
+
+```
+
+On voit que les admis sont en moyenne plus jeunes que les non-admis.
+
+
+
+
+#### Tests statistiques
+
+
+
+##### Test de Student
+
+
+Un des tests les plus connus est le test du t de Student, qui permet de tester si les moyennes d'âge des deux sous-populations peuvent être considérées comme différentes (compte tenu des fluctuations aléatoires provenant du biais d’échantillonnage).
+
+Un test t s’effectue à l’aide de la fonction t.test. Ainsi, on peut tester l’hypothèse d’égalité des âges moyens selon l'admission ou non d’un candidat avec la commande suivante :
+
+```{r}
+t.test(inp18$age ~ inp18$admis)
+
+```
+
+
+Le résultat du test est significatif, avec un p extrêmement petit, et on peut rejeter l’hypothèse nulle d’égalité des moyennes des deux groupes. Le test nous donne même un intervalle de confiance à 95% pour la valeur de la différence entre les deux moyennes.
+
+
+
+
+##### Test de Wilcoxon
+
+Maintenant vérifions nos résultats en appliquant un test non-paramétrique qui permet de déterminer si, sur la base des rangs des échantillons, on peut considérer que les deux échantillons sont identiques ou non en terme de position, en l’occurrence le test des rangs de Wilcoxon.
+
+
+
+```{r}
+wilcox.test(inp18$age ~ inp18$admis)
+
+```
+
+La valeur p étant à nouveau extrêmement petite, on peut rejeter l’hypothèse d’indépendance et considérer que les distributions des âges dans les deux sous-populations sont différentes.
+
+
+
+
+
+
+### La variable meanDossier
+
+
+#### Représentation graphique
+
+```{r}
+boxplot(inp18$meanDossier ~ inp18$admis)
+```
+
+Dans le graphique ci-dessus, on voit que ceux qui ont été admis ont une moyenne de dossier supérieure aux autres.
+
+
+
+
+#### Calculs d’indicateurs
+
+
+```{r}
+tapply(inp18$meanDossier, inp18$admis, mean)
+
+```
+
+On voit que les admis sont en moyenne plus performants que les autres.
+
+
+
+
+#### Tests statistiques
+
+
+
+##### Test de Student
+
+
+
+```{r}
+t.test(inp18$meanDossier ~ inp18$admis)
+
+```
+
+
+Le résultat du test est significatif, avec un p extrêmement petit, et on peut rejeter l’hypothèse nulle d’égalité des moyennes des deux groupes. Le test nous donne même un intervalle de confiance à 95% pour la valeur de la différence entre les deux moyennes de dossier.
+
+
+
+
+##### Test de Wilcoxon
+
+
+
+```{r}
+wilcox.test(inp18$meanDossier ~ inp18$admis)
+
+```
+
+La valeur p étant à nouveau extrêmement petite, on peut rejeter l’hypothèse d’indépendance et considérer que les distributions des moyennes de dossier dans les deux sous-populations sont différentes.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# **Regression 1**
+
+Pour analyser une variable binaire (dont les valeurs seraient VRAI/FAUX, 0/1, ou encore OUI/NON) en fonction d'une variable explicative quantitative, on peut utiliser une régression logistique.
+
+## Echantillonage/Test
+Nous séparons tout d'abord la base de données en un échantillon d'apprentissage de taille 3300 qui sera utilisé pour estimer nos modèles logistiques et un échantillon test de taille 2474 qui sera utilisé pour mesurer la performance des modèles
+
+```{r}
+set.seed(5774)
+
+#nouvel échantillon sans les variables identifiant, date de naissance, cycle, FilierAcueil et ecoleAccueil
+inp18_new=inp18 [,c(3:9,13,25:27)]
+
+#échantillon d'apprentissage
+div= sample(nrow(inp18_new),3300)
+app = inp18_new[div,]
+#échantillon de test
+test = inp18_new[-div,]
+
+head(test)
+head(app)
+```
+## Modèle sur toutes les variables
+
+
+### Problème de multicolinéarité
+
+En testant la significativité de chaque variable de notre modèle, nous rencontrons cette erreur : "there are aliased coefficients in the model".
+Cette erreur signifie que nous rencontrons un problème de multicolinéarité.
+
+### C'est quoi la Multicolinéarité ?
+
+Dans une régression, la multicolinéarité est un problème qui survient lorsque certaines variables de prévision du modèle mesurent le même phénomène. Une multicolinéarité prononcée s’avère problématique, car elle peut augmenter la variance des coefficients de régression et les rendre instables et difficiles à interpréter. Les conséquences de coefficients instables peuvent être les suivantes :
+
+les coefficients peuvent sembler non significatifs, même lorsqu’une relation significative existe entre le prédicteur et la réponse ;
+les coefficients de prédicteurs fortement corrélés varieront considérablement d’un échantillon à un autre ;
+lorsque des termes d’un modèle sont fortement corrélés, la suppression de l’un de ces termes aura une incidence considérable sur les coefficients estimés des autres. Les coefficients des termes fortement corrélés peuvent même présenter le mauvais signe.
+La multicolinéarité n’a aucune incidence sur l’adéquation de l’ajustement, ni sur la qualité de la prévision. Cependant, les coefficients individuels associés à chaque variable explicative ne peuvent pas être interprétés de façon fiable.
+
+Au sens strict, on parle de multicolinéarité parfaite lorsqu’une des variables explicatives d’un modèle est une combinaison linéraire d’une ou plusieurs autres variables explicatives introduites dans le même modèle. L’absence de multicolinéarité parfaite est une des conditions requises pour pouvoir estimer un modèle linéaire et, par extension, un modèle linéaire généralisé (dont les modèles de régression logistique).
+
+Dans les faits, une multicolinéarité parfaite n’est quasiment jamais observée. Mais une forte multicolinéarité entre plusieurs variables peut poser problème dans l’estimation et l’interprétation d’un modèle.
+
+Dans la suite nous ferons donc un modèle sans les choix de filière et nous garderons la variable meanDossier.
+
+## Création du modèle
+
+```{r}
+
+myreg=glm(admis~.,data=app, family=binomial)
+
+
+```
+
+
+
+Par la suite , nous avons encore rencontré un problème de multicolinéarité. Avec le paramètre "singular.ok=TRUE", nous voyons que c'est le paramètre établissement d'origine qui n'a pas pu  être estimé. nous allons donc la retirer de notre modèle puis reprendre la regression.
+
+
+```{r}
+library(car)
+app_new=(app)[,-7]
+myreg2=glm(admis~.,data=app_new, family=binomial)
+summary(myreg2)
+result = Anova(myreg2, type=3,test.statistic = "Wald")
+result
+```
+
+
+Dans notre modèle, plusieurs variables sont considérées non significatives. Il semble donc que l'on puisse retirer certaines variables explicatives du modèle complet.
+
+## Sélection du modèle
+
+La fonction step permet de sélectionner un modèle à l'aide d'une procédure pas à pas basée sur la minimisation du critère AIC.
+
+### Procédure descendante
+Objectifs de cette procédure :
+Calculer la régression pour le modèle incluant toutes les k
+variables explicatives à diposition.
+Effectuer un test de Student pour chacune des variables
+explicatives. Deux cas se présentent :
+Les variables sont trouvées significatives. Ce modèle est
+alors choisi. On stoppe là notre analyse.
+Éliminer la variable la moins significative du modèle.
+Recommencer le processus avec une variable en moins.
+Le modèle final est donc un modèle au sein duquel toutes les
+variables sont significatives.
+
+La méthode descendante est très satisfaisante pour
+l’utilisateur préférant avoir toutes les variables possibles
+afin de ne rien ignorer.
+
+```{r}
+myreg_step = step(myreg2,direction="backward")
+summary(myreg_step)
+Anova(myreg_step, type=3,test.statistic = "Wald")
+
+```
+
+
+### Procédure ascendante
+
+Cette méthode procéde dans le sens inverse de la
+méthode descendante.
+Cette méthode examine un modèle avec une seule
+variable explicative puis introduction une à une d’autres
+variables explicatives en fonction de leur significativité.
+
+
+```{r}
+
+myreg_step2 = step(myreg2,direction="forward")
+summary(myreg_step2)
+Anova(myreg_step2, type=3,test.statistic = "Wald")
+
+```
+
+
+
+### Procédure stepwise
+
+
+À chaque étape, on réexamine toutes les
+variables introduites précédemment dans le modèle.
+En effet, une variable considérée comme la plus
+significative à une étape de l’algorithme peut à une étape
+ultérieure devenir non significative en raison de ses corrélations avec d’autres variables
+introduites après coup dans le modèle.
+
+
+
+```{r}
+
+myreg_step3 = step(myreg2,direction="both")
+summary(myreg_step3)
+Anova(myreg_step3, type=3,test.statistic = "Wald")
+
+```
+
+
+Le modèle sélectionné ne comporte que 3 variables significatives que sont la série, l'âge, et la moyenne du dossier.
+Maintenant effectuons un test entre modèles emboîtés pour comparer le modèle sélectionné au modèle complet.
+
+
+
+```{r}
+anova(myreg_step3,myreg2, test= "LRT")
+
+```
+
+Le test accepte ici l'hypothèse H1 de la nullité des paramètres du modèle complet qui ne sont pas dans le modèle de regression stepwise.
+On privilégiera donc le modèle myreg_step3.
+
+
+### Essai de prévision
+
+Au moment de faire la prévision, un problème lié au facteur série s'est posé, il y a certaines séries qui étaient bien trop peu représentées, pour être à la fois dans nos données échantillon, et dans nos données test. Ce qui a donc provoqué une érreur.
+
+
+Pour résoudre ce problème, nous pouvons décider intuitivement de repartir les séries en des groupes de:
+-séries scientifiques
+-séries littéraires
+-séries techniques
+Mais nous opterons plutôt pour une méthode de repartition plus appropriée:
+Le clustering
+
+# **Clustering** 
+
+## CAH sur les modalités de la variable série.
+
+La CAH (Classification Ascendante Hiérarchique) produit une suite
+de partitions emboîtées à n, n − 1, . . . , 1 classes, par
+regroupements successifs.
+
+```{r}
+#création de variables dummy 
+inp18.clus = inp18[,c(1,5)]
+inp18.cl <- dummy_cols(inp18.clus, select_columns = 'serie')
+inp18.cl1 = inp18.cl[,-c(1,2)]
+inp18.var = t(inp18.cl1)
+# Normalisation des données
+inp18.cr <- scale(inp18.var, center=TRUE, scale=TRUE)
+
+#Calcul les distances entre les individus
+dist.eucl <- dist(inp18.cr, method = "euclidean") 
+```
+
+Nous appliquons la CAH en utilisant différentes stratégies d’agrégation:
+single : Single linkage (saut minimal)
+complete : Complete linkage (saut maximal)
+average : Average lainage (distance moyenne)
+ward.D2 : Ward linkage
+
+
+```{r}
+
+cah.complete <- hclust(dist.eucl, method = "complete")
+cah.single <- hclust(dist.eucl, method = "single")
+cah.average <- hclust(dist.eucl, method = "average")
+cah.ward.D2 <- hclust(dist.eucl, method = "ward.D2")
+
+
+```
+
+
+### Représentation des sauts d’inertie avec chaque méthode et selon le nombre de classes.
+
+```{r}
+
+par(mfrow=c(2,2))
+# complete
+inertie <- sort(cah.complete$height, decreasing = TRUE)
+plot(inertie, type = "s", xlab = "Nombre de classes", 
+     ylab = "Hauteur", main="Ecart entre hauteur d'agrégation 'complete'")
+points(c(2,3,4,5,6), inertie[c(2,3,4,5,6)], col = c("green3","red3", "blue3","yellow3","orange3"), cex = 2, lwd = 3)
+
+# single
+inertie <- sort(cah.single$height, decreasing = TRUE)
+plot(inertie, type = "s", xlab = "Nombre de classes", 
+     ylab = "Hauteur", main="Ecart entre hauteur d'agrégation 'single'")
+points(c(2,3,4,6), inertie[c(2,3,4,6)], col = c("green3", "red3","yellow3","blue3"), cex = 2, lwd = 3)
+
+# average
+inertie <- sort(cah.average$height, decreasing = TRUE)
+plot(inertie, type = "s", xlab = "Nombre de classes", 
+     ylab = "Hauteur", main="Ecart entre hauteur d'agrégation 'average'")
+points(c(2, 3, 4, 6), inertie[c(2, 3,4,6)], col = c("green3", "red3","blue3","yellow3"), cex = 2, lwd = 3)
+
+# ward
+inertie <- sort(cah.ward.D2$height, decreasing = TRUE)
+plot(inertie, type = "s", xlab = "Nombre de classes", 
+     ylab = "Hauteur", main="Ecart entre hauteur d'agrégation 'ward'")
+points(c(2, 3, 4, 6), inertie[c(2, 3, 4, 6)], col = c("green3", "red3", "blue3","yellow3"), cex = 2, lwd = 3)
+```
+
+
+La majorité des méthodes nous permet de partitionner les séries de notre jeu de données en 2, 3, 4 ou 6 groupes. Au moyen de la méthode de k-means, nous déterminerons le nombre de classes à choisir.
+
+
+## Consolidation de la CAH avec la méthode de K-means
+
+
+Le principe hiérarchique de la procédure fait que les partitions
+obtenues étape après étape ne sont jamais remises en cause.
+A l’issue de la CAH, des individus de certaines classes peuvent
+se trouver proches de barycentres d’autres classes.
+La consolidation consiste alors à réaliser un K-means en
+utilisant le nombre de classes de la CAH et en l’initialisant
+avec les centres des classes de la CAH.
+
+### Classification k-means avec k = 2
+
+
+
+```{r}
+k <- 2
+kmeans <-  kmeans(inp18.cr, centers= k)
+cat("inertie inter-classes", kmeans$betweenss,"\n")
+
+```
+
+
+### Classification k-means avec k = 3
+
+
+
+```{r}
+k <- 3
+kmeans <-  kmeans(inp18.cr, centers= k)
+cat("inertie inter-classes", kmeans$betweenss,"\n")
+
+```
+
+
+
+### Classification k-means avec k = 4
+
+
+
+```{r}
+k <- 4
+kmeans <-  kmeans(inp18.cr, centers= k)
+cat("inertie inter-classes", kmeans$betweenss,"\n")
+
+```
+
+
+
+### Classification k-means avec k = 6
+
+
+
+```{r}
+k <- 6
+kmeans <-  kmeans(inp18.cr, centers= k)
+cat("inertie inter-classes", kmeans$betweenss,"\n")
+
+```
+
+La division de la partition en 6 augmente de manière significative la part d’inertie expliquée par la partition. Nous rétiendrons donc une partition à 6 classes de nos séries.
+
+
+### Les groupes
+
+
+```{r}
+library("FactoMineR")
+
+acp <-  PCA(inp18.cr,graph = FALSE)
+```
+
+Groupe 1
+```{r}
+names(kmeans$cluster[kmeans$cluster==1])
+```
+
+Groupe 2
+```{r}
+names(kmeans$cluster[kmeans$cluster==2])
+```
+
+Groupe 3
+```{r}
+names(kmeans$cluster[kmeans$cluster==3])
+```
+
+Groupe 4
+```{r}
+names(kmeans$cluster[kmeans$cluster==4])
+```
+
+Groupe 5
+```{r}
+names(kmeans$cluster[kmeans$cluster==5])
+```
+
+Groupe 6
+```{r}
+names(kmeans$cluster[kmeans$cluster==6])
+```
+
+
+# **Regression 2** 
+
+
+Nous changerons les modalités de la variable série pour transformer le 6ème groupe en "autre technique"
+
+```{r}
+
+
+#nouvel échantillon sans les variables identifiant, date de naissance, cycle, FilierAcueil, ecoleAccueil, etablissement d'origine et les variables dummy.
+
+inp18_ok=(inp18)[,c(3:8,13,25,26,27)]
+
+# Modification de la variable série en créant 6 groupes
+inp18_ok$serie=fct_lump(inp18_ok$serie, n = 5, other_level = "Autre filière")
+summary(inp18_ok$serie)
+```
+
+## Echantillon d'apprentissage/test 
+
+Plus la taille d’échantillon augmente, plus le modèle apprend
+efficacement.
+Nous augmenterons donc la taille de l'échantillon d'apprentissage à 3900
+
+
+```{r}
+set.seed(5774)
+#échantillon d'apprentissage
+divi= sample(nrow(inp18_ok),3900)
+app2 = inp18_ok[divi,]
+#échantillon de test
+test2 = inp18_ok[-divi,]
+head(app2)
+head(test2)
+```
+
+
+## Modèle complet
+
+```{r}
+
+reg_comp=glm(admis~.,data=app2, family=binomial)
+summary(reg_comp)
+resultat = Anova(reg_comp, type=3,test.statistic = "Wald")
+resultat
+```
+
+## Procédure Stepwise du critère AIC
+
+```{r}
+reg_comp_stepw = step(reg_comp,direction="both")
+summary(reg_comp_stepw)
+Anova(reg_comp_stepw, type=3,test.statistic = "Wald")
+
+```
+
+
+
+Le modèle sélectionné comprend maintenant 6 variables dont la variable genre qui n'est pas significative.
+Nous nous servirons d'un autre critère pour décider si cette variable doit faire partir de notre modèle 
+
+
+
+
+## Comparaison de modèle 
+
+
+Maintenant comparons le modèle contenant la variable genre avec celui ne la contenant pas en se servant du critère BIC
+
+
+### Avec le genre
+
+```{r}
+reg_min1 =glm(admis~meanDossier+age+serie+mentionAuBac+nbrechoix+genre,data=app2, family=binomial)
+BIC(reg_min1)
+```
+### Sans le genre
+
+```{r}
+reg_min = glm(admis~meanDossier+age+serie+mentionAuBac+nbrechoix,data=app2, family=binomial)
+BIC(reg_min)
+```
+
+La variable genre n'est vraiment pas significative pour notre modèle. Nous garderons donc le modèle qui minimise le critère BIC.
+
+
+### Testons la nullité des paramètres du modèle complet ne figurant pas dans notre modèle reg_min
+
+```{r}
+anova(reg_min,reg_comp, test= "LRT")
+
+```
+Le modèle "reg_min" peut donc être privilégié pour la prévision.
+
+
+
+
+
+
+
+# **Prévision**
+
+Recherchons les probabilités prédites des individus de l'échantillon test
+
+```{r}
+prevision_test = predict(reg_min, newdata = test2, type = "response")
+head(round(prevision_test, 3), 50)
+
+```
+
+
+
+
+
+
+## Performance du modèle sur l'échantillon test
+
+On souhaite comparer les performances du modèle "reg_min" et du modèle complet "reg_comp" en estimant le taux de mal classés et les courbes ROC obtenues sur l'échantillon test. On récupère d'abord les probabilités estimées d'être admis par les deux modèles.
+
+Ici encore, les prévisions avec le modèle complet nous indique que la nationalité a une nouvelle modalité dans l'échantillon test que le modèle n'a pas appris, tout comme le rang en terminale
+Pour résoudre ce problème, nous diviserons la nationalité en 2 groupes: les ivoiriens et les autres qui représenteront les étrangers, puis nous ferons à nouveau une regression sur le modèle complet, et nous procéderons à notre comparaison.
+Pour le rang la division se fera en 41 groupes.
+
+
+```{r}
+inp18_ok$Nationalite=fct_lump(inp18_ok$Nationalite, n = 1, other_level = "Etrangère")
+inp18_ok$rangEnTerminale=fct_lump(inp18_ok$rangEnTerminale, n= 40, other_level = "Autre rang")
+summary(inp18_ok$Nationalite)
+set.seed(5774)
+#échantillon d'apprentissage
+divi= sample(nrow(inp18_ok),3900)
+app2 = inp18_ok[divi,]
+#échantillon de test
+test2 = inp18_ok[-divi,]
+
+#Modèle complet
+reg_comp=glm(admis~.,data=app2, family=binomial)
+resultat = Anova(reg_comp, type=3,test.statistic = "Wald")
+resultat
+
+#Modèle à 5 variables
+
+reg_min = glm(admis~meanDossier+age+serie+mentionAuBac+nbrechoix,data=app2, family=binomial)
+Anova(reg_min, type=3,test.statistic = "Wald")
+
+
+
+```
+
+
+
+Récupération des probabilités estimées d'être admis par les deux modèles pour les individus de l'échantillon test.  
+
+```{r}
+aicbic = predict(reg_min, newdata= test2, type ="response")
+complet = predict(reg_comp, newdata = test2, type="response")
+prob_prev = data.frame(complet,aicbic)
+head(round(prob_prev, 3), 50)
+```
+
+
+
+
+
+On peut ensuite en déduire une estimation de la classe en confrontant ces probabilités au seuil de 0.5
+
+```{r}
+prev_class = apply (prob_prev>= 0.5,2,factor,labels=c(0,1))
+head(prev_class,n=50)
+```
+
+
+On obtient enfin les erreurs de classification estimées des 2 modèles en confrontant les valeurs prédites aux valeurs observées
+
+
+```{r}
+prev_class= data.frame(prev_class)
+prev_class %>% 
+  mutate(obs=test2$admis) %>% 
+  summarise_all(funs (err=mean(obs!=.)) ) %>% 
+  select(-obs_err)  %>%
+  round(3)
+  
+```
+
+Mean Absolute Error (MAE), une alternative au RMSE qui est moins sensible aux valeurs aberrantes. Il correspond à la différence absolue moyenne entre les résultats observés et prédits. Plus la MAE est basse, meilleur est le modèle.
+Les taux d'erreurs sont acceptables et comparables. 
+
+
+Nous pouvons les confirmer grâce à la courbe ROC et l'AUC..
+
+### Courbes ROC 
+
+```{r}
+library(pROC)
+library(plotROC)
+df_roc = prob_prev %>% mutate (obs= test2$admis ) %>%
+          gather(key= methode, value=score, complet, aicbic)
+
+
+ggplot(df_roc) + aes(d=obs,m=score,color=methode)+geom_roc()+theme_classic()
+
+  
+
+```
+INTERPRETATION : 
+Dans le tracé ROC, nous essayons toujours de nous déplacer vers le haut et le coin supérieur gauche. À partir de ce graphique, nous pouvons interpréter que le modèle prédit moins correctement des valeurs plus positives(les admis au concours).
+ La courbe confirme le bon score de notre modèle à 5 variables car après 0.5 (notre seuil), la différence entre le taux d'erreur de notre modèle et 0 est très moindre. 
+
+
+### AUC du modèle sur le dataset test
+
+
+
+```{r}
+auc(test2$admis,aicbic)
+```
+
+
+
+## Performance du modèle sur le dataset initial
+
+
+
+```{r}
+#Modèle à 5 variables
+
+reg_final1 = glm(admis~meanDossier+age+serie+mentionAuBac+nbrechoix,data=inp18_ok, family=binomial)
+Anova(reg_final1, type=3,test.statistic = "Wald")
+
+
+# probabilité d'être admis
+final1=predict(reg_final1, newdata = inp18_ok, type = "response")
+prevision_final1 = data.frame(final1)
+head(round(prevision_final1, 3), 35)
+
+
+# Décision au seuil de 0.5 
+
+decision1 = apply (prevision_final1>= 0.5,2,factor,labels=c(0,1))
+head(decision1,n=35)
+
+
+error= data.frame(decision1)
+error %>% 
+  mutate(obs=inp18_ok$admis) %>% 
+  summarise_all(funs (err=mean(obs!=.)) ) %>% 
+  select(-obs_err)  %>%
+  round(3)
+
+```
+
+
+
+
+### Courbe ROC
+
+```{r}
+ 
+
+
+library(pROC)
+library(plotROC)
+df_roc = prevision_final1 %>% mutate (obs= inp18_ok$admis ) %>%
+          gather(key= methode, value=score, final1)
+
+
+ggplot(df_roc) + aes(d=obs,m=score,color=methode)+geom_roc()+theme_classic()
+
+```
+
+
+### AUC du modèle sur le dataset initial
+
+
+
+```{r}
+
+auc(inp18_ok$admis,final1)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Test du modèle sur le dataset de 2017
+
+Importation du dataset de 2017
+
+```{r}
+
+library(xlsx)
+inp17=read.xlsx(file="E:/cours idsi/semestre2/projet tutore/inp17_ok.xlsx",sheetName="inp17_ok")
+
+```
+
+
+
+
+Modèle, estimations et taux d'erreur.
+
+
+
+
+```{r}
+#Modèle à 5 variables
+
+reg_final = glm(admis~meanDossier+age+serie+mentionAuBac+nbrechoix,data=inp17, family=binomial)
+Anova(reg_final, type=3,test.statistic = "Wald")
+
+
+# probabilité d'être admis
+final=predict(reg_final, newdata = inp17, type = "response")
+prevision_final = data.frame(final)
+head(round(prevision_final, 3), 35)
+
+
+# Décision au seuil de 0.5 
+
+decision = apply (prevision_final>= 0.5,2,factor,labels=c(0,1))
+head(decision,n=35)
+
+#Taux d'erreur
+error= data.frame(decision)
+error %>% 
+  mutate(obs=inp17$admis) %>% 
+  summarise_all(funs (err=mean(obs!=.)) ) %>% 
+  select(-obs_err)  %>%
+  round(3)
+```
+
+
+### Courbe ROC
+
+```{r}
+ 
+
+
+library(pROC)
+library(plotROC)
+df_roc = prevision_final %>% mutate (obser= inp17$admis ) %>%
+          gather(key= methode, value=score, final)
+
+
+ggplot(df_roc) + aes(d=obser,m=score,color=methode)+geom_roc()+theme_classic()
+
+```
+
+### AUC du modèle sur le dataset 2017
+
+
+
+```{r}
+auc(inp17$admis,final)
+```
+
+
+
+
+
+
+
+
+
+
+
+# **Exportation du modèle**
+
+
+
+
+
+
+```{r}
+
+saveRDS(reg_final, file ="modeleconcoursinp.rds")
+
+```
+
+
+
+
+
+
+
+
+ACCURACY
+
+```{r}
+confusionMatrix(data= factor(ifelse(final>0.5, 1, 0)),reference= as.factor(inp17$admis))
+
+```
+
+```{r}
+confusionMatrix(data= factor(ifelse(final1>0.5, 1, 0)),reference= as.factor(inp18_ok$admis))
+
+```
+
+```{r}
+confusionMatrix(data= factor(ifelse(aicbic>0.5, 1, 0)),reference= as.factor(test2$admis))
+
+```
+
+
+
+
+
+
+
+
