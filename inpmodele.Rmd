@@ -1,5 +1,5 @@
 ---
-title: "SOUMAKANZA"
+title: "SOUM"
 date: "`r Sys.Date()`"
 output:
   rmdformats::readthedown:
